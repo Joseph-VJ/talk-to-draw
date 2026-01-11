@@ -1,5 +1,4 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask import Flask, render_template, request, jsonify, session
 import sqlite3
 import os
 from datetime import datetime
@@ -41,6 +40,11 @@ def init_db():
 # Initialize database on startup
 init_db()
 
+def get_db_connection():
+    conn = sqlite3.connect('database.db')
+    conn.row_factory = sqlite3.Row
+    return conn
+
 @app.route('/')
 def index():
     # No authentication required - everyone can use the app
@@ -56,14 +60,25 @@ def save_drawing():
     if 'user_id' not in session:
         session['user_id'] = 1
     
-    data = request.get_json()
-    command = data.get('command')
-    image_url = data.get('image_url')
+    command = request.form.get('command')
+    image_file = request.files.get('image')
     
-    if not command or not image_url:
+    if not command or not image_file:
         return jsonify({'success': False, 'error': 'Missing data'}), 400
     
-    conn = sqlite3.connect('database.db')
+    # Save the file
+    filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}.png"
+    filepath = os.path.join('static/drawings', filename)
+
+    try:
+        image_file.save(filepath)
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Failed to save file: {str(e)}'}), 500
+
+    # URL to access the image
+    image_url = f"/static/drawings/{filename}"
+
+    conn = get_db_connection()
     c = conn.cursor()
     c.execute('INSERT INTO drawings (user_id, command, image_url) VALUES (?, ?, ?)',
               (session['user_id'], command, image_url))
@@ -79,7 +94,7 @@ def get_drawings():
     if 'user_id' not in session:
         session['user_id'] = 1
     
-    conn = sqlite3.connect('database.db')
+    conn = get_db_connection()
     c = conn.cursor()
     c.execute('''SELECT id, command, image_url, created_at 
                  FROM drawings 
@@ -92,10 +107,10 @@ def get_drawings():
     drawings_list = []
     for d in drawings:
         drawings_list.append({
-            'id': d[0],
-            'command': d[1],
-            'image_url': d[2],
-            'created_at': d[3]
+            'id': d['id'],
+            'command': d['command'],
+            'image_url': d['image_url'],
+            'created_at': d['created_at']
         })
     
     return jsonify({'success': True, 'drawings': drawings_list})
@@ -106,11 +121,30 @@ def delete_drawing(drawing_id):
     if 'user_id' not in session:
         session['user_id'] = 1
     
-    conn = sqlite3.connect('database.db')
+    conn = get_db_connection()
     c = conn.cursor()
-    c.execute('DELETE FROM drawings WHERE id = ? AND user_id = ?', 
+
+    # Get image details first to delete the file
+    c.execute('SELECT image_url FROM drawings WHERE id = ? AND user_id = ?',
               (drawing_id, session['user_id']))
-    conn.commit()
+    row = c.fetchone()
+
+    if row:
+        image_url = row['image_url']
+        # Convert URL to file path (remove leading /)
+        if image_url.startswith('/'):
+            file_path = image_url.lstrip('/')
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except OSError as e:
+                    print(f"Error deleting file {file_path}: {e}")
+
+        # Delete from DB
+        c.execute('DELETE FROM drawings WHERE id = ? AND user_id = ?',
+                  (drawing_id, session['user_id']))
+        conn.commit()
+
     conn.close()
     
     return jsonify({'success': True})

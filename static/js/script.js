@@ -38,6 +38,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load gallery on startup
     loadGallery();
     
+    // Handle Enter key in prompt input
+    const promptInput = document.getElementById('promptInput');
+    if (promptInput) {
+        promptInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                startDrawing();
+            }
+        });
+    }
+
     console.log('App initialized successfully!');
 });
 
@@ -262,8 +272,26 @@ async function generateImage(prompt) {
         
         showStatus('Generating your drawing... 🎨');
         
-        // Method 1: Pollinations.ai (100% free, no signup, no limits!)
-        const imageElement = await generateWithPollinations(enhancedPrompt);
+        let imageElement;
+
+        try {
+            // Primary Method: Pollinations.ai (No login required)
+            console.log('Attempting generation with Pollinations.ai...');
+            imageElement = await generateWithPollinations(enhancedPrompt);
+        } catch (pollinationsError) {
+            console.warn('Pollinations failed, switching to fallback...', pollinationsError);
+            showStatus('Switching to fallback provider... 🔄');
+
+            // Fallback Method: Puter.js (May require login/credits or test mode)
+            try {
+                console.log('Attempting generation with Puter.js...');
+                imageElement = await generateWithPuter(enhancedPrompt);
+            } catch (puterError) {
+                console.error('All providers failed');
+                throw new Error('All image generation providers failed.');
+            }
+        }
+
         currentImageUrl = imageElement.src;
         
         // Wait a moment then start reveal animation
@@ -298,8 +326,33 @@ function showStatus(msg) {
     statusEl.classList.add('active');
 }
 
-// Puter.js - Free AI image generation with test mode (no auth required)
+// Pollinations.ai - Free, no-login image generation
 async function generateWithPollinations(prompt) {
+    const encodedPrompt = encodeURIComponent(prompt);
+    // Add seed to avoid caching same image for same prompt if retried
+    const seed = Math.floor(Math.random() * 1000000);
+    const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?nologo=true&seed=${seed}&model=flux`;
+
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous'; // Important for canvas manipulation
+
+        img.onload = () => {
+            console.log('Pollinations image loaded successfully');
+            resolve(img);
+        };
+
+        img.onerror = (e) => {
+            console.error('Pollinations image load failed', e);
+            reject(new Error('Failed to load image from Pollinations'));
+        };
+
+        img.src = url;
+    });
+}
+
+// Puter.js - Free AI image generation with test mode (no auth required)
+async function generateWithPuter(prompt) {
     try {
         console.log('=== Starting Puter.js image generation ===');
         console.log('Prompt:', prompt);
@@ -455,13 +508,17 @@ async function saveDrawing() {
     }
     
     try {
+        // Fetch the blob from the currentImageUrl
+        const imgResponse = await fetch(currentImageUrl);
+        const blob = await imgResponse.blob();
+
+        const formData = new FormData();
+        formData.append('command', currentCommand);
+        formData.append('image', blob, 'drawing.png');
+
         const response = await fetch('/api/save-drawing', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                command: currentCommand,
-                image_url: currentImageUrl
-            })
+            body: formData
         });
         
         const data = await response.json();
@@ -592,15 +649,3 @@ function switchTab(tab) {
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
-
-// Handle Enter key in prompt input
-document.addEventListener('DOMContentLoaded', () => {
-    const promptInput = document.getElementById('promptInput');
-    if (promptInput) {
-        promptInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                startDrawing();
-            }
-        });
-    }
-});
