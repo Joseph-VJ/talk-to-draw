@@ -38,6 +38,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load gallery on startup
     loadGallery();
     
+    // Handle Enter key in prompt input
+    const promptInput = document.getElementById('promptInput');
+    if (promptInput) {
+        promptInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                startDrawing();
+            }
+        });
+    }
+
     console.log('App initialized successfully!');
 });
 
@@ -262,8 +272,8 @@ async function generateImage(prompt) {
         
         showStatus('Generating your drawing... 🎨');
         
-        // Method 1: Pollinations.ai (100% free, no signup, no limits!)
-        const imageElement = await generateWithPollinations(enhancedPrompt);
+        // Method 1: Puter.js
+        const imageElement = await generateWithPuter(enhancedPrompt);
         currentImageUrl = imageElement.src;
         
         // Wait a moment then start reveal animation
@@ -299,7 +309,7 @@ function showStatus(msg) {
 }
 
 // Puter.js - Free AI image generation with test mode (no auth required)
-async function generateWithPollinations(prompt) {
+async function generateWithPuter(prompt) {
     try {
         console.log('=== Starting Puter.js image generation ===');
         console.log('Prompt:', prompt);
@@ -455,13 +465,17 @@ async function saveDrawing() {
     }
     
     try {
+        // Fetch the blob from the currentImageUrl
+        const imgResponse = await fetch(currentImageUrl);
+        const blob = await imgResponse.blob();
+
+        const formData = new FormData();
+        formData.append('command', currentCommand);
+        formData.append('image', blob, 'drawing.png');
+
         const response = await fetch('/api/save-drawing', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                command: currentCommand,
-                image_url: currentImageUrl
-            })
+            body: formData
         });
         
         const data = await response.json();
@@ -592,15 +606,3 @@ function switchTab(tab) {
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
-
-// Handle Enter key in prompt input
-document.addEventListener('DOMContentLoaded', () => {
-    const promptInput = document.getElementById('promptInput');
-    if (promptInput) {
-        promptInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                startDrawing();
-            }
-        });
-    }
-});
