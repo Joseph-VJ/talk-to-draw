@@ -272,8 +272,26 @@ async function generateImage(prompt) {
         
         showStatus('Generating your drawing... 🎨');
         
-        // Method 1: Puter.js
-        const imageElement = await generateWithPuter(enhancedPrompt);
+        let imageElement;
+
+        try {
+            // Primary Method: Pollinations.ai (No login required)
+            console.log('Attempting generation with Pollinations.ai...');
+            imageElement = await generateWithPollinations(enhancedPrompt);
+        } catch (pollinationsError) {
+            console.warn('Pollinations failed, switching to fallback...', pollinationsError);
+            showStatus('Switching to fallback provider... 🔄');
+
+            // Fallback Method: Puter.js (May require login/credits or test mode)
+            try {
+                console.log('Attempting generation with Puter.js...');
+                imageElement = await generateWithPuter(enhancedPrompt);
+            } catch (puterError) {
+                console.error('All providers failed');
+                throw new Error('All image generation providers failed.');
+            }
+        }
+
         currentImageUrl = imageElement.src;
         
         // Wait a moment then start reveal animation
@@ -306,6 +324,31 @@ function showStatus(msg) {
     const statusEl = document.getElementById('statusText');
     statusEl.textContent = msg;
     statusEl.classList.add('active');
+}
+
+// Pollinations.ai - Free, no-login image generation
+async function generateWithPollinations(prompt) {
+    const encodedPrompt = encodeURIComponent(prompt);
+    // Add seed to avoid caching same image for same prompt if retried
+    const seed = Math.floor(Math.random() * 1000000);
+    const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?nologo=true&seed=${seed}&model=flux`;
+
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous'; // Important for canvas manipulation
+
+        img.onload = () => {
+            console.log('Pollinations image loaded successfully');
+            resolve(img);
+        };
+
+        img.onerror = (e) => {
+            console.error('Pollinations image load failed', e);
+            reject(new Error('Failed to load image from Pollinations'));
+        };
+
+        img.src = url;
+    });
 }
 
 // Puter.js - Free AI image generation with test mode (no auth required)
