@@ -1,0 +1,28 @@
+# Node
+node_modules/
+dist/
+frontend/node_modules/
+frontend/dist/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+backend/__pycache__/
+.env
+.venv
+venv/
+env/
+backend/images/*.png
+backend/images/*.jpg
+backend/images/*.jpeg
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
