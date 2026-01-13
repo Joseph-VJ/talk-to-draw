@@ -16,6 +16,12 @@ env/
 backend/images/*.png
 backend/images/*.jpg
 backend/images/*.jpeg
+*.db
+*.sqlite3
+
+# Files to exclude
+README.zip
+
 
 # OS
 .DS_Store
